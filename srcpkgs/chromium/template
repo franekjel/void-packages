@@ -77,6 +77,14 @@ post_patch() {
 	# prevent annoying errors when regenerating gni
 	vsed -i 's,^update_readme$,#update_readme,' \
 		third_party/libvpx/generate_gni.sh
+
+
+	"${FILESDIR}"/ungoogled-chromium/utils/prune_binaries.py . "${FILESDIR}"/ungoogled-chromium/pruning.list
+	"${FILESDIR}"/ungoogled-chromium/utils/patches.py apply . "${FILESDIR}"/ungoogled-chromium/patches
+	"${FILESDIR}"/ungoogled-chromium/utils/domain_substitution.py apply -r "${FILESDIR}"/ungoogled-chromium/domain_regex.list -f "${FILESDIR}"/ungoogled-chromium/domain_substitution.list -c build/domsubcache.tar.gz .
+#	                                 ./utils/domain_substitution.py apply -r                                  domain_regex.list -f                                  domain_substitution.list -c build/domsubcache.tar.gz build/src
+
+		
 }
 do_configure() {
 	local system="" conf=()
@@ -202,10 +210,6 @@ do_configure() {
 	# libspeechd_h_prefix=\"speech-dispatcher/\""
 	conf+=( "link_pulseaudio=$(vopt_if pulseaudio true false)" )
 
-	conf+=(
-		"use_sndio=$(vopt_if sndio true false)"
-	)
-
 	# Never use bundled binutils/gold binary.
 	conf+=(
 		"gold_path=\"${XBPS_CROSS_BASE}/usr/bin/ld.gold\""
@@ -216,12 +220,6 @@ do_configure() {
 	# XXX: gold broken with musl, i686, and x86_64 so disable globally
 	conf+=( 'use_gold=false' )
 
-	# Always support proprietary codecs.
-	# Enable H.264 support in bundled ffmpeg.
-	conf+=(
-		'proprietary_codecs=true'
-		'ffmpeg_branding="Chrome"'
-	)
 
 	# this does not work on ppc64 yet
 	case "$XBPS_TARGET_MACHINE" in
@@ -248,6 +246,41 @@ do_configure() {
 		ppc64*) conf+=( 'target_cpu="ppc64"' ) ;;
 	esac
 
+conf+=(
+	'build_with_tflite_lib=false'
+	'chrome_pgo_phase=0'
+	'clang_use_chrome_plugins=false'
+	'enable_hangout_services_extension=false'
+	'enable_js_type_check=false'
+	'enable_mdns=false'
+	'enable_mse_mpeg2ts_stream_parser=true'
+	'enable_nacl=false'
+	'enable_nacl_nonsfi=false'
+	'enable_one_click_signin=false'
+	'enable_reading_list=false'
+	'enable_remoting=false'
+	'enable_reporting=false'
+	'enable_service_discovery=false'
+	'enable_widevine=true'
+	'exclude_unwind_tables=true'
+	'fieldtrial_testing_like_official_build=true'
+	'google_api_key=""'
+	'google_default_client_id=""'
+	'google_default_client_secret=""'
+	'safe_browsing_mode=0'
+	'treat_warnings_as_errors=false'
+	'use_official_google_api_keys=false'
+	'use_unofficial_version_number=false'
+)
+
+
+	conf+=(
+		'use_ozone=true'
+		'ozone_platform_wayland=true'
+		'ozone_platform_x11=true'
+		'ozone_platform="wayland"'
+	)
+
 	out/Release/gn gen out/Release --args="${conf[*]}"
 }
 do_build() {
@@ -256,7 +289,7 @@ do_build() {
 		export CXX=clang++
 	fi
 
-	ninja -C out/Release ${makejobs} chrome chromedriver mksnapshot
+	ninja -C out/Release -j6 chrome chromedriver mksnapshot
 }
 do_install() {
 	vinstall out/Release/chrome 755 usr/lib/${pkgname} ${pkgname}
